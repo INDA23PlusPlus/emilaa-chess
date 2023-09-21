@@ -52,8 +52,8 @@ impl ChessBoard {
             en_passant: false,
             white_castling: (true, true),
             black_castling: (true, true),
-            white_king_index: 56,
-            black_king_index: 31
+            white_king_index: 60,
+            black_king_index: 4
         };
 
         b.board[0] = ChessPiece::black(2);
