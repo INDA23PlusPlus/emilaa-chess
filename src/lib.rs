@@ -266,6 +266,8 @@ impl ChessBoard {
         if self.board[from].piece_id == 1 {
             self.promote_pawn(from, to);
         }
+        
+        if self.board[to as usize].piece_id == 6 { self.game_end = true; }
 
         if !self.is_tile_same_color(to, from) && self.en_passant {
             self.en_passant = false;
@@ -274,7 +276,6 @@ impl ChessBoard {
             self.board[to as usize] = ChessPiece::new();
         }
 
-        if self.board[to as usize].piece_id == 6 { self.game_end = true; }
         self.board.swap(from as usize, to as usize);
         self.update();
 
@@ -1102,7 +1103,10 @@ mod tests {
         board.move_by_algebraic("d8", "d4");
         assert!(board.simulate_check(true, board.white_king_index));
         assert!(!board.move_by_algebraic("d2", "d3"));
-        board.move_by_algebraic("d2", "c2");
+        board.move_by_algebraic("a2", "a4");
+        assert!(board.simulate_check(true, board.white_king_index));
+        board.move_by_algebraic("d4", "d2");
+        assert!(board.game_end);
         board.print();
     }
 
