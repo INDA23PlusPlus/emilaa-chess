@@ -125,6 +125,15 @@ impl ChessBoard {
     }
 
     /**
+    ### Check if the game has ended.
+    ## Returns:
+    `true` if a king is captured or is in checkmate, otherwise `false`.
+    */
+    pub fn is_game_ended(&self) -> bool {
+        return self.game_end;
+    }
+
+    /**
     ### Move a piece using algebraic notation.
     The function moves the requested piece if nothing went wrong. <br>
     This function converts the algebraic notation into indices and calls move by index.
@@ -239,7 +248,7 @@ impl ChessBoard {
             }
         }
 
-        if !self.is_move_legal(from, to) {
+        if !self.is_move_legal(from, to, false) {
             println!("Illegal move...");
             return false;
         }
@@ -280,10 +289,10 @@ impl ChessBoard {
     ## Returns:
     `false` if no legal move was found, otherwise `true`
     */
-    fn is_move_legal(&mut self, from: usize, to: usize) -> bool {
+    fn is_move_legal(&mut self, from: usize, to: usize, sim: bool) -> bool {
         match self.board[from].piece_id {
             1 => {
-                return self.check_pawn_move(from, to);
+                return self.check_pawn_move(from, to, sim);
             }
             2 => {
                 return self.check_rook_move(from, to);
@@ -317,7 +326,7 @@ impl ChessBoard {
     ## Returns:
     `false` if the move was illegal, otherwise `true`
     */
-    fn check_pawn_move(&mut self, from: usize, to: usize) -> bool {
+    fn check_pawn_move(&mut self, from: usize, to: usize, sim: bool) -> bool {
         if !self.board[from].has_moved
             && to as i8 == from as i8 + self.board[from].color * 16i8
             && self.is_tile_empty(to)
@@ -337,7 +346,7 @@ impl ChessBoard {
             }
         }
 
-        if !self.check_en_passant(from, to)
+        if !self.check_en_passant(from, to, sim)
             && (self.is_tile_empty(to) || self.is_tile_same_color(to, from))
             && to as i8 != from as i8 + self.board[from].color * 8
         {
@@ -566,7 +575,7 @@ impl ChessBoard {
             if self.board[i].piece_id == 0 || self.board[i].color != test_color {
                 continue;
             }
-            if self.is_move_legal(i, index) {
+            if self.is_move_legal(i, index, true) {
                 return true;
             }
         }
@@ -586,6 +595,7 @@ impl ChessBoard {
         let mut ways_out: std::vec::Vec<i8> = vec![];
         let file: i8 = self.index_file(index as i8);
         let rank: i8 = self.index_rank(index as i8);
+        let mut invalid_counter: i8 = 0;
 
         let mut i: i8 = -9;
         while i <= 9 {
@@ -599,22 +609,25 @@ impl ChessBoard {
             let current_index: i8 = i + index as i8;
 
             if current_index > 63 || current_index < 0 || i == 0 {
+                invalid_counter += 1;
                 i += 1;
                 continue;
             }
             if (self.index_file(current_index) - file).abs() > 1
                 || (self.index_rank(current_index) - rank).abs() > 1
             {
+                invalid_counter += 1;
                 i += 1;
                 continue;
             }
 
             if self.is_tile_same_color(current_index as usize, index) {
+                invalid_counter += 1;
                 i += 1;
                 continue;
             }
 
-            let tmp: ChessPiece = self.board[current_index as usize];
+            let tmp: ChessPiece = self.board[current_index as usize].clone();
 
             self.board[current_index as usize] = ChessPiece::new();
             self.board.swap(index, current_index as usize);
@@ -630,7 +643,11 @@ impl ChessBoard {
             i += 1;
         }
 
-        return ways_out.is_empty();
+        if invalid_counter == 9 {
+            return false;
+        } else {
+            return ways_out.is_empty();
+        }
     }
 
     /**
@@ -641,7 +658,8 @@ impl ChessBoard {
     ## Returns:
     `false` if the move was illegal, otherwise `true`
     */
-    fn check_en_passant(&mut self, from: usize, to: usize) -> bool {
+    fn check_en_passant(&mut self, from: usize, to: usize, sim: bool) -> bool {
+        if sim { return false; }
         let piece: &ChessPiece = &self.board[from];
         if to as i8 - piece.color * 8 < 0 || to as i8 - piece.color * 8 > 63 {
             return false;
@@ -801,13 +819,13 @@ impl ChessBoard {
     pub fn print(&mut self) {
         let colors: [&str; 2] = ["30;47;1", "47;40;1"];
 
-        print!("\x1b[38;5;130;1m+----------------+\n|\x1b[39;49;0m");
+        print!("\x1b[38;5;130;1m+----------------+\n|\x1b[0m");
         for i in 0..64 {
             let index: usize = self.board[i].color.clamp(0, 1) as usize;
 
             if self.board[i].piece_id != 0 {
                 print!(
-                    "\x1b[{}m{} \x1b[39;49;0m",
+                    "\x1b[{}m{} \x1b[0m",
                     colors[index],
                     self.id_to_char(self.board[i].piece_id)
                 );
@@ -816,10 +834,10 @@ impl ChessBoard {
             }
 
             if (i + 1) % 8 == 0 {
-                print!("\x1b[38;5;130m|\n|\x1b[39;49;0m");
+                print!("\x1b[38;5;130m|\n|\x1b[0m");
             }
         }
-        print!("\x1b[38;5;130m\r+----------------+\x1b[39;49;0m\n\n");
+        print!("\x1b[38;5;130m\r+----------------+\x1b[0m\n\n");
     }
 
     ///### Convert piece id to corresponding character.
@@ -845,47 +863,47 @@ mod tests {
     #[test]
     fn black_pawns() {
         let mut board = ChessBoard::new();
-        assert!(board.check_pawn_move( 8, 16));
-        assert!(board.check_pawn_move( 9, 17));
-        assert!(board.check_pawn_move(10, 18));
-        assert!(board.check_pawn_move(11, 19));
-        assert!(board.check_pawn_move(12, 20));
-        assert!(board.check_pawn_move(13, 21));
-        assert!(board.check_pawn_move(14, 22));
-        assert!(board.check_pawn_move(15, 23));
+        assert!(board.check_pawn_move( 8, 16, false));
+        assert!(board.check_pawn_move( 9, 17, false));
+        assert!(board.check_pawn_move(10, 18, false));
+        assert!(board.check_pawn_move(11, 19, false));
+        assert!(board.check_pawn_move(12, 20, false));
+        assert!(board.check_pawn_move(13, 21, false));
+        assert!(board.check_pawn_move(14, 22, false));
+        assert!(board.check_pawn_move(15, 23, false));
 
         board.reset();
-        assert!(board.check_pawn_move( 8, 24));
-        assert!(board.check_pawn_move( 9, 25));
-        assert!(board.check_pawn_move(10, 26));
-        assert!(board.check_pawn_move(11, 27));
-        assert!(board.check_pawn_move(12, 28));
-        assert!(board.check_pawn_move(13, 29));
-        assert!(board.check_pawn_move(14, 30));
-        assert!(board.check_pawn_move(15, 31));
+        assert!(board.check_pawn_move( 8, 24, false));
+        assert!(board.check_pawn_move( 9, 25, false));
+        assert!(board.check_pawn_move(10, 26, false));
+        assert!(board.check_pawn_move(11, 27, false));
+        assert!(board.check_pawn_move(12, 28, false));
+        assert!(board.check_pawn_move(13, 29, false));
+        assert!(board.check_pawn_move(14, 30, false));
+        assert!(board.check_pawn_move(15, 31, false));
     }
 
     #[test]
     fn white_pawns() {
         let mut board = ChessBoard::new();
-        assert!(board.check_pawn_move(48, 40));
-        assert!(board.check_pawn_move(49, 41));
-        assert!(board.check_pawn_move(50, 42));
-        assert!(board.check_pawn_move(51, 43));
-        assert!(board.check_pawn_move(52, 44));
-        assert!(board.check_pawn_move(53, 45));
-        assert!(board.check_pawn_move(54, 46));
-        assert!(board.check_pawn_move(55, 47));
+        assert!(board.check_pawn_move(48, 40, false));
+        assert!(board.check_pawn_move(49, 41, false));
+        assert!(board.check_pawn_move(50, 42, false));
+        assert!(board.check_pawn_move(51, 43, false));
+        assert!(board.check_pawn_move(52, 44, false));
+        assert!(board.check_pawn_move(53, 45, false));
+        assert!(board.check_pawn_move(54, 46, false));
+        assert!(board.check_pawn_move(55, 47, false));
 
         board.reset();
-        assert!(board.check_pawn_move(48, 32));
-        assert!(board.check_pawn_move(49, 33));
-        assert!(board.check_pawn_move(50, 34));
-        assert!(board.check_pawn_move(51, 35));
-        assert!(board.check_pawn_move(52, 36));
-        assert!(board.check_pawn_move(53, 37));
-        assert!(board.check_pawn_move(54, 38));
-        assert!(board.check_pawn_move(55, 39));
+        assert!(board.check_pawn_move(48, 32, false));
+        assert!(board.check_pawn_move(49, 33, false));
+        assert!(board.check_pawn_move(50, 34, false));
+        assert!(board.check_pawn_move(51, 35, false));
+        assert!(board.check_pawn_move(52, 36, false));
+        assert!(board.check_pawn_move(53, 37, false));
+        assert!(board.check_pawn_move(54, 38, false));
+        assert!(board.check_pawn_move(55, 39, false));
     }
 
     #[test]
@@ -964,13 +982,14 @@ mod tests {
         }
 
         assert!(board.move_by_algebraic("d1", "f3"));
-        assert!(board.move_by_algebraic("d8", "d3"));
+        assert!(board.move_by_algebraic("d8", "d4"));
         
         assert!(!board.move_by_algebraic("f3", "h2"));
         assert!(!board.move_by_algebraic("f3", "g1"));
         assert!(!board.move_by_algebraic("f3", "e1"));
-        println!("");
         assert!(!board.move_by_algebraic("f3", "d2"));
+        assert!(!board.move_by_algebraic("f3", "d4"));
+        assert!(!board.move_by_algebraic("f3", "e5"));
     }
 
     #[test]
@@ -1070,6 +1089,21 @@ mod tests {
 
         assert!(!board.white_castling.0 && !board.white_castling.1);
         assert!(!board.black_castling.0 && !board.black_castling.1);
+    }
+
+    #[test]
+    fn test_check() {
+        let mut board: ChessBoard = ChessBoard::new();
+        board.move_by_algebraic("d2", "d4");
+        board.move_by_algebraic("d7", "d5");
+        board.move_by_algebraic("c2", "c4");
+        board.move_by_algebraic("d5", "c4");
+        board.move_by_algebraic("e1", "d2");
+        board.move_by_algebraic("d8", "d4");
+        assert!(board.simulate_check(true, board.white_king_index));
+        assert!(!board.move_by_algebraic("d2", "d3"));
+        board.move_by_algebraic("d2", "c2");
+        board.print();
     }
 
     #[test]
