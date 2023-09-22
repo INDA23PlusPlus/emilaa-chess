@@ -49,7 +49,7 @@ pub struct ChessBoard {
     white_castling: (bool, bool),
     black_castling: (bool, bool),
     white_king_index: usize,
-    black_king_index: usize,
+    black_king_index: usize
 }
 
 impl ChessBoard {
@@ -68,31 +68,31 @@ impl ChessBoard {
             white_castling: (true, true),
             black_castling: (true, true),
             white_king_index: 60,
-            black_king_index: 4,
+            black_king_index: 4
         };
 
         b.board[0] = ChessPiece::black(2);
-        // b.board[1] = ChessPiece::black(3);
-        // b.board[2] = ChessPiece::black(4);
-        // b.board[3] = ChessPiece::black(5);
+        b.board[1] = ChessPiece::black(3);
+        b.board[2] = ChessPiece::black(4);
+        b.board[3] = ChessPiece::black(5);
         b.board[4] = ChessPiece::black(6);
-        // b.board[5] = ChessPiece::black(4);
-        // b.board[6] = ChessPiece::black(3);
+        b.board[5] = ChessPiece::black(4);
+        b.board[6] = ChessPiece::black(3);
         b.board[7] = ChessPiece::black(2);
 
         b.board[56] = ChessPiece::white(2);
-        // b.board[57] = ChessPiece::white(3);
-        // b.board[58] = ChessPiece::white(4);
-        // b.board[59] = ChessPiece::white(5);
+        b.board[57] = ChessPiece::white(3);
+        b.board[58] = ChessPiece::white(4);
+        b.board[59] = ChessPiece::white(5);
         b.board[60] = ChessPiece::white(6);
-        // b.board[61] = ChessPiece::white(4);
-        // b.board[62] = ChessPiece::white(3);
+        b.board[61] = ChessPiece::white(4);
+        b.board[62] = ChessPiece::white(3);
         b.board[63] = ChessPiece::white(2);
 
-        // for i in 8..16 {
-        //     b.board[i] = ChessPiece::black(1);
-        //     b.board[i + 40] = ChessPiece::white(1);
-        // }
+        for i in 8..16 {
+            b.board[i] = ChessPiece::black(1);
+            b.board[i + 40] = ChessPiece::white(1);
+        }
 
         return b;
     }
@@ -107,6 +107,21 @@ impl ChessBoard {
         self.black_castling = (true, true);
         self.white_king_index = 60;
         self.black_king_index = 4;
+    }
+    
+    /**
+    ### Get a copy of the board.
+    ## Returns:
+    A flat array of tuples with size 64. First element is the piece id, second is color.
+    */
+    pub fn get_board(&self) -> [(i8, i8); 64] {
+        let mut b: [(i8, i8); 64] = [(0,0); 64];
+
+        for i in 0..64 {
+            b[i] = (self.board[i].piece_id, self.board[i].color);
+        }
+
+        return b;
     }
 
     /**
@@ -250,15 +265,9 @@ impl ChessBoard {
             self.board[to as usize] = ChessPiece::new();
         }
 
+        if self.board[to as usize].piece_id == 6 { self.game_end = true; }
         self.board.swap(from as usize, to as usize);
         self.update();
-
-        if self.simulate_checkmate(true, self.white_king_index)
-            || self.simulate_checkmate(false, self.black_king_index)
-        {
-            println!("A king was checkmated...");
-            self.game_end = true;
-        }
 
         return true;
     }
@@ -332,6 +341,10 @@ impl ChessBoard {
             && (self.is_tile_empty(to) || self.is_tile_same_color(to, from))
             && to as i8 != from as i8 + self.board[from].color * 8
         {
+            return false;
+        }
+
+        if to as i8 == from as i8 + self.board[from].color * 8 && !self.is_tile_empty(to) {
             return false;
         }
 
@@ -463,25 +476,28 @@ impl ChessBoard {
         }
 
         let mut i = from as i8 + dir + step;
-        let mut last_file = self.index_file(i);
+        let mut last_file = self.index_file(from as i8);
+        let mut last_rank = self.index_rank(from as i8);
 
-        while i >= 0 && i < 64 && i != to as i8 {
-            if (last_file - self.index_file(i)).abs() == 7 {
+        while i >= 0 && i < 64 {
+            if i == to as i8 && !self.is_tile_same_color(from, to) {
+                return true;
+            }
+            
+            if (last_file - self.index_file(i)).abs() != 1i8 || (last_rank - self.index_rank(i)).abs() != 1i8 {
                 return false;
             }
+
             if !self.is_tile_empty(i as usize) {
                 return false;
             }
 
             last_file = self.index_file(i);
+            last_rank = self.index_rank(i);
             i += dir + step;
         }
 
-        if self.is_tile_same_color(from, to) {
-            return false;
-        }
-
-        return true;
+        return false;
     }
 
     /**
@@ -507,18 +523,20 @@ impl ChessBoard {
                 i = 7;
             }
 
-            if (i + from as i8) > 63 || (i + from as i8) < 0 {
+            let current_index = i + from as i8;
+
+            if current_index > 63 || current_index < 0 {
                 i += 1;
                 continue;
             }
-            if (self.index_file(i + from as i8) - file).abs() > 1
-                || (self.index_rank(i + from as i8) - rank).abs() > 1
+            if (self.index_file(current_index) - file).abs() > 1
+                || (self.index_rank(current_index) - rank).abs() > 1
             {
                 i += 1;
                 continue;
             }
 
-            if i + from as i8 == to as i8 && !self.is_tile_same_color(to, from) {
+            if current_index == to as i8 && !self.is_tile_same_color(to, from) {
                 let white_king: bool = self.board[from].color == -1;
                 if self.simulate_check(white_king, to) {
                     return false;
@@ -578,20 +596,36 @@ impl ChessBoard {
                 i = 7;
             }
 
-            if (i + index as i8) > 63 || (i + index as i8) < 0 || i == 0 {
+            let current_index: i8 = i + index as i8;
+
+            if current_index > 63 || current_index < 0 || i == 0 {
                 i += 1;
                 continue;
             }
-            if (self.index_file(i + index as i8) - file).abs() > 1
-                || (self.index_rank(i + index as i8) - rank).abs() > 1
+            if (self.index_file(current_index) - file).abs() > 1
+                || (self.index_rank(current_index) - rank).abs() > 1
             {
                 i += 1;
                 continue;
             }
 
-            if !self.simulate_check(white, (i + index as i8) as usize) {
-                ways_out.push(i + index as i8)
+            if self.is_tile_same_color(current_index as usize, index) {
+                i += 1;
+                continue;
             }
+
+            let tmp: ChessPiece = self.board[current_index as usize];
+
+            self.board[current_index as usize] = ChessPiece::new();
+            self.board.swap(index, current_index as usize);
+            
+
+            if !self.simulate_check(white, current_index as usize) {
+                ways_out.push(current_index);
+            }
+
+            self.board.swap(index, current_index as usize);
+            self.board[current_index as usize] = tmp;
 
             i += 1;
         }
@@ -685,6 +719,8 @@ impl ChessBoard {
         let steps: i8 = if queen_side { 4 } else { 3 };
         let dir: i8 = if queen_side { -1 } else { 1 };
 
+        if self.simulate_check(white, king_pos as usize) { return false; }
+
         for i in 1..steps {
             if !self.is_tile_empty((king_pos + i * dir) as usize) {
                 return false;
@@ -692,11 +728,23 @@ impl ChessBoard {
         }
 
         if queen_side {
+            if self.simulate_check(white, (king_pos - 2) as usize) { return false; }
             self.board.swap(king_pos as usize, (king_pos - 2) as usize);
             self.board.swap((king_pos - steps) as usize, (king_pos - 1) as usize);
+            if white {
+                self.white_king_index = (king_pos - 2) as usize;
+            } else {
+                self.black_king_index = (king_pos - 2) as usize;
+            }
         } else {
+            if self.simulate_check(white, (king_pos + 2) as usize) { return false; }
             self.board.swap(king_pos as usize, (king_pos + 2) as usize);
             self.board.swap((king_pos + steps) as usize, (king_pos + 1) as usize);
+            if white {
+                self.white_king_index = (king_pos + 2) as usize;
+            } else {
+                self.black_king_index = (king_pos + 2) as usize;
+            }
         }
 
         if white {
@@ -715,10 +763,18 @@ impl ChessBoard {
     */
     fn update(&mut self) {
         self.white_turn = !self.white_turn;
+
         if !self.game_started {
             self.game_started = true;
         }
         self.update_castling_rights();
+
+        if self.simulate_checkmate(true, self.white_king_index)
+            || self.simulate_checkmate(false, self.black_king_index)
+        {
+            println!("A king is checkmated...");
+            self.game_end = true;
+        }
     }
 
     ///### Check if a tile is empty.
@@ -780,5 +836,271 @@ impl ChessBoard {
                 return ' ';
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{ChessBoard, ChessPiece};
+    #[test]
+    fn black_pawns() {
+        let mut board = ChessBoard::new();
+        assert!(board.check_pawn_move( 8, 16));
+        assert!(board.check_pawn_move( 9, 17));
+        assert!(board.check_pawn_move(10, 18));
+        assert!(board.check_pawn_move(11, 19));
+        assert!(board.check_pawn_move(12, 20));
+        assert!(board.check_pawn_move(13, 21));
+        assert!(board.check_pawn_move(14, 22));
+        assert!(board.check_pawn_move(15, 23));
+
+        board.reset();
+        assert!(board.check_pawn_move( 8, 24));
+        assert!(board.check_pawn_move( 9, 25));
+        assert!(board.check_pawn_move(10, 26));
+        assert!(board.check_pawn_move(11, 27));
+        assert!(board.check_pawn_move(12, 28));
+        assert!(board.check_pawn_move(13, 29));
+        assert!(board.check_pawn_move(14, 30));
+        assert!(board.check_pawn_move(15, 31));
+    }
+
+    #[test]
+    fn white_pawns() {
+        let mut board = ChessBoard::new();
+        assert!(board.check_pawn_move(48, 40));
+        assert!(board.check_pawn_move(49, 41));
+        assert!(board.check_pawn_move(50, 42));
+        assert!(board.check_pawn_move(51, 43));
+        assert!(board.check_pawn_move(52, 44));
+        assert!(board.check_pawn_move(53, 45));
+        assert!(board.check_pawn_move(54, 46));
+        assert!(board.check_pawn_move(55, 47));
+
+        board.reset();
+        assert!(board.check_pawn_move(48, 32));
+        assert!(board.check_pawn_move(49, 33));
+        assert!(board.check_pawn_move(50, 34));
+        assert!(board.check_pawn_move(51, 35));
+        assert!(board.check_pawn_move(52, 36));
+        assert!(board.check_pawn_move(53, 37));
+        assert!(board.check_pawn_move(54, 38));
+        assert!(board.check_pawn_move(55, 39));
+    }
+
+    #[test]
+    fn rook_movement() {
+        let mut board: ChessBoard = ChessBoard::new();
+        board.board = [ChessPiece::new(); 64];
+        board.board[56] = ChessPiece::white(2);
+
+        for i in 0..64 {
+            if i == 56 { continue; }
+            
+            if board.index_rank(i) == board.index_rank(56) ||
+               board.index_file(i) == board.index_file(56)
+            {
+                assert!(board.check_rook_move(56, i as usize));
+            } else {
+                assert!(!board.check_rook_move(56, i as usize));
+            }
+        }
+    }
+
+    #[test]
+    fn knight_movement() {
+        let mut board: ChessBoard = ChessBoard::new();
+        board.board = [ChessPiece::new(); 64];
+        board.board[27] = ChessPiece::white(2);
+
+        for i in 0..64 {
+            if i == 27 { continue; }
+            if i == 27 - 17 || i == 27 - 15 || i == 27 - 10 || i == 27 - 6 ||
+               i == 27 + 17 || i == 27 + 15 || i == 27 + 10 || i == 27 + 6
+            {
+                assert!(board.check_knight_move(27, i));
+            } else {
+                assert!(!board.check_knight_move(27, i));
+            }
+        }
+
+        board.reset();
+        assert!(board.move_by_algebraic("g1", "h3"));
+        assert!(board.move_by_algebraic("b8", "a6"));
+        assert!(board.move_by_algebraic("b1", "c3"));
+        assert!(board.move_by_algebraic("g8", "f6"));
+
+        board.reset();
+        assert!(!board.move_by_algebraic("g1", "e2"));
+        assert!(!board.move_by_algebraic("g8", "e7"));
+        assert!(!board.move_by_algebraic("b1", "d2"));
+        assert!(!board.move_by_algebraic("b8", "d7"));
+    }
+
+    #[test]
+    fn bishop_movement() {
+        let mut board: ChessBoard = ChessBoard::new();
+        for i in 8..16 {
+            board.board[i] = ChessPiece::new();
+            board.board[i+40] = ChessPiece::new();
+        }
+
+        assert!(board.move_by_algebraic("f1", "a6"));
+        assert!(board.move_by_algebraic("c8", "a6"));
+
+        assert!(board.move_by_algebraic("c1", "e3"));
+        assert!(board.move_by_algebraic("f8", "h6"));
+        assert!(!board.move_by_algebraic("e3", "h7"));
+        assert!(!board.move_by_algebraic("e3", "h5"));
+        assert!(board.move_by_algebraic("e3", "h6"));
+    }
+
+    #[test]
+    fn queen_movement() {
+        let mut board: ChessBoard = ChessBoard::new();
+        for i in 8..16 {
+            board.board[i] = ChessPiece::new();
+            board.board[i+40] = ChessPiece::new();
+        }
+
+        assert!(board.move_by_algebraic("d1", "f3"));
+        assert!(board.move_by_algebraic("d8", "d3"));
+        
+        assert!(!board.move_by_algebraic("f3", "h2"));
+        assert!(!board.move_by_algebraic("f3", "g1"));
+        assert!(!board.move_by_algebraic("f3", "e1"));
+        println!("");
+        assert!(!board.move_by_algebraic("f3", "d2"));
+    }
+
+    #[test]
+    fn king_movement() {
+        let mut board: ChessBoard = ChessBoard::new();
+        for i in 8..16 {
+            board.board[i] = ChessPiece::new();
+            board.board[i+40] = ChessPiece::new();
+        }
+
+        assert!(!board.move_by_algebraic("e1", "f1"));
+        assert!(!board.move_by_algebraic("e1", "d1"));
+        assert!(!board.move_by_algebraic("e1", "d2"));
+        assert!(!board.move_by_algebraic("e1", "h1"));
+        assert!(!board.move_by_algebraic("e1", "a1"));
+        assert!(board.move_by_algebraic("e1", "e2"));
+    }
+
+    #[test]
+    fn test_en_passant() {
+        let mut board: ChessBoard = ChessBoard::new();
+        for i in 8..16 {
+            board.board[i] = ChessPiece::new();
+            board.board[i+40] = ChessPiece::new();
+        }
+
+        board.board[26] = ChessPiece::black(1);
+        board.board[26].has_moved_two = true;
+        board.board[26].has_moved = true;
+
+        board.board[29] = ChessPiece::black(1);
+        board.board[29].has_moved = true;
+
+        board.board[27] = ChessPiece::white(1);
+        board.board[27].has_moved = true;
+        
+        board.board[30] = ChessPiece::white(1);
+        board.board[30].has_moved_two = true;
+        board.board[30].has_moved = true;
+
+        board.board[39] = ChessPiece::white(1);
+        board.board[39].has_moved = true;
+
+        assert!(board.move_by_algebraic("d5", "c6"));
+        assert!(board.is_tile_empty(26));
+        assert!(board.board[18].piece_id == 1 && board.board[18].color == -1);
+
+        assert!(board.move_by_algebraic("f5", "g4"));
+        assert!(board.is_tile_empty(30));
+        assert!(board.board[38].piece_id == 1 && board.board[38].color == 1);
+
+        assert!(!board.move_by_algebraic("h4", "g5"));
+    }
+
+    #[test]
+    fn test_castling() {
+        let mut board: ChessBoard = ChessBoard::new();
+
+        assert!(board.move_by_algebraic("b1", "a3"));
+        assert!(board.move_by_algebraic("g8", "h6"));
+        assert!(board.move_by_algebraic("b2", "b3"));
+        assert!(board.move_by_algebraic("g7", "g6"));
+        assert!(board.move_by_algebraic("c2", "c3"));
+        assert!(board.move_by_algebraic("f7", "f6"));
+        assert!(board.move_by_algebraic("d2", "d3"));
+        assert!(board.move_by_algebraic("f8", "g7"));
+        assert!(board.move_by_algebraic("c1", "b2"));
+        assert!(board.move_by_algebraic("e7", "e6"));
+        assert!(board.move_by_algebraic("d1", "c2"));
+
+        assert!(!board.move_by_algebraic("e8", "a8"));
+        assert!(board.move_by_algebraic("e8", "h8"));
+
+        assert!(!board.move_by_algebraic("e1", "h1"));
+        assert!(board.move_by_algebraic("e1", "a1"));
+
+        assert!(!board.white_castling.0 && !board.white_castling.1);
+        assert!(!board.black_castling.0 && !board.black_castling.1);
+
+        board.reset();
+        for i in 8..16 {
+            board.board[i] = ChessPiece::new();
+            board.board[i+40] = ChessPiece::new();
+        }
+
+        assert!(board.move_by_algebraic("a1", "a2"));
+        assert!(!board.white_castling.0);
+
+        assert!(board.move_by_algebraic("a8", "a7"));
+        assert!(!board.black_castling.0);
+
+        assert!(board.move_by_algebraic("h1", "h2"));
+        assert!(!board.white_castling.1);
+
+        assert!(board.move_by_algebraic("h8", "h7"));
+        assert!(!board.black_castling.1);
+
+        assert!(!board.white_castling.0 && !board.white_castling.1);
+        assert!(!board.black_castling.0 && !board.black_castling.1);
+    }
+
+    #[test]
+    fn test_checkmate() {
+        let mut board: ChessBoard = ChessBoard::new();
+        board.board = [ChessPiece::new(); 64];
+        board.black_king_index = 32;
+        board.white_king_index = 62;
+
+        board.board[32] = ChessPiece::black(6);
+        board.board[62] = ChessPiece::white(6);
+        board.board[33] = ChessPiece::white(5);
+        board.board[63] = ChessPiece::white(1);
+
+        board.move_by_algebraic("h1", "h2");
+
+        assert!(!board.game_end);
+
+        board.reset();
+        board.board = [ChessPiece::new(); 64];
+        board.black_king_index = 32;
+        board.white_king_index = 62;
+
+        board.board[32] = ChessPiece::black(6);
+        board.board[62] = ChessPiece::white(6);
+        board.board[34] = ChessPiece::white(5);
+        board.board[63] = ChessPiece::white(1);
+        board.board[8] = ChessPiece::white(2);
+        board.board[48] = ChessPiece::white(2);
+
+        board.move_by_algebraic("h1", "h2");
+        assert!(board.game_end);
     }
 }
