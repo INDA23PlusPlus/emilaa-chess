@@ -49,7 +49,8 @@ pub struct ChessBoard {
     white_castling: (bool, bool),
     black_castling: (bool, bool),
     white_king_index: usize,
-    black_king_index: usize
+    black_king_index: usize,
+    promotion: (bool, usize)
 }
 
 impl ChessBoard {
@@ -68,7 +69,8 @@ impl ChessBoard {
             white_castling: (true, true),
             black_castling: (true, true),
             white_king_index: 60,
-            black_king_index: 4
+            black_king_index: 4,
+            promotion: (false, usize::MAX)
         };
 
         b.board[0] = ChessPiece::black(2);
@@ -107,6 +109,7 @@ impl ChessBoard {
         self.black_castling = (true, true);
         self.white_king_index = 60;
         self.black_king_index = 4;
+        self.promotion = (false, usize::MAX);
     }
     
     /**
@@ -131,6 +134,31 @@ impl ChessBoard {
     */
     pub fn is_game_ended(&self) -> bool {
         return self.game_end;
+    }
+
+    /**
+    ### Check if a pawn can be promoted.
+    ## Returns:
+    `true` if a pawn can be promoted, otherwise `false`.
+    */
+    pub fn can_promote(&self) -> bool {
+        return self.promotion.0;
+    }
+
+    /**
+    ### Try to promote a pawn.
+    ## Returns:
+    `true` if a pawn got promoted, otherwise `false`.
+    */
+    pub fn promote(&mut self, id: i8) -> bool {
+        if self.promotion.0 && id < 6 && id > 1 {
+            self.board[self.promotion.1].piece_id = id;
+            self.promotion = (false, usize::MAX);
+            self.update();
+            return true;
+        }
+        
+        return  false;
     }
 
     /**
@@ -198,6 +226,10 @@ impl ChessBoard {
     `move_by_index(4, 12)` would attempt to move a piece from index 4 to 12, or e8 to e7 in algebraic notation.
     */
     pub fn move_by_index(&mut self, from: usize, to: usize) -> bool {
+        if self.promotion.0 {
+            return false;
+        }
+
         if from == to {
             println!("Can't move to same tile...");
             return false;
@@ -264,7 +296,7 @@ impl ChessBoard {
         }
 
         if self.board[from].piece_id == 1 {
-            self.promote_pawn(from, to);
+            self.check_promotion(from, to);
         }
         
         if self.board[to as usize].piece_id == 6 { self.game_end = true; }
@@ -305,7 +337,6 @@ impl ChessBoard {
                 return self.check_bishop_move(from, to);
             }
 
-            // Queen essentially moves like the bishop and rook combined.
             5 => {
                 return self.check_bishop_move(from, to) || self.check_rook_move(from, to);
             }
@@ -338,11 +369,11 @@ impl ChessBoard {
         }
 
         if self.board[from].color == 1 {
-            if to > from + 9 || to < from + 7 {
+            if to as i8 > from as i8 + 9 || (to as i8) < (from as i8 + 7) {
                 return false;
             }
         } else {
-            if to > from - 7 || to < from - 9 {
+            if to as i8 > from as i8 - 7 || (to as i8) < (from as i8 - 9) {
                 return false;
             }
         }
@@ -609,7 +640,15 @@ impl ChessBoard {
 
             let current_index: i8 = i + index as i8;
 
-            if current_index > 63 || current_index < 0 || i == 0 {
+            if i == 0 {
+                if !self.simulate_check(white, current_index as usize) {
+                    ways_out.push(current_index);
+                }
+                i += 1;
+                continue;
+            }
+
+            if current_index > 63 || current_index < 0 {
                 invalid_counter += 1;
                 i += 1;
                 continue;
@@ -632,7 +671,7 @@ impl ChessBoard {
 
             self.board[current_index as usize] = ChessPiece::new();
             self.board.swap(index, current_index as usize);
-            
+                
 
             if !self.simulate_check(white, current_index as usize) {
                 ways_out.push(current_index);
@@ -662,7 +701,7 @@ impl ChessBoard {
     fn check_en_passant(&mut self, from: usize, to: usize, sim: bool) -> bool {
         if sim { return false; }
         let piece: &ChessPiece = &self.board[from];
-        if to as i8 - piece.color * 8 < 0 || to as i8 - piece.color * 8 > 63 {
+        if to as i8 - piece.color * 8 < 8 || to as i8 - piece.color * 8 > 55 {
             return false;
         }
         let target: &ChessPiece = &self.board[(to as i8 - piece.color * 8) as usize];
@@ -680,17 +719,20 @@ impl ChessBoard {
 
     /**
     ### Determines if a pawn shall be promoted.
-    If the pawn has reached to other side of the board, it is promoted to a queen.
-    ## Note:
-    Only promotes to a queen.
     */
-    fn promote_pawn(&mut self, from: usize, to: usize) {
-        if self.board[from].color == 1 && to > 55 && to < 64 {
-            self.board[from].piece_id = 5;
+    fn check_promotion(&mut self, from: usize, to: usize) {
+        if self.promotion.0 { return; }
+
+        if self.board[from].color == 1 && to > 55 {
+            self.promotion = (true, to);
         }
 
         if self.board[from].color == -1 && to < 8 {
-            self.board[from].piece_id = 5;
+            self.promotion = (true, to);
+        }
+
+        if self.promotion.0 {
+            println!("A pawn can be promoted...");
         }
     }
 
@@ -781,7 +823,9 @@ impl ChessBoard {
     Calls `update_castling_rights()` as well.
     */
     fn update(&mut self) {
-        self.white_turn = !self.white_turn;
+        if !self.promotion.0 {
+            self.white_turn = !self.white_turn;
+        }
 
         if !self.game_started {
             self.game_started = true;
