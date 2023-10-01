@@ -151,7 +151,7 @@ impl ChessBoard {
     `true` if a pawn got promoted, otherwise `false`.
     */
     pub fn promote(&mut self, id: i8) -> bool {
-        if self.promotion.0 && id < 6 && id > 1 {
+        if self.promotion.0 && id < 6 && id > 0 {
             self.board[self.promotion.1].piece_id = id;
             self.promotion = (false, usize::MAX);
             self.update();
