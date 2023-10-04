@@ -1,160 +1,159 @@
-/// ### Chess piece strucure.
+use std::collections::HashMap;
+
+/// Chess piece structure.
 #[derive(Copy, Clone)]
-struct ChessPiece {
-    piece_id: i8,
-    color: i8,
-    has_moved: bool,
-    has_moved_two: bool,
+struct Piece {
+    id: i8,
+    team: i8,
+    moved: bool,        // Pawns only.
+    moved_twice: bool   // Pawns only.
 }
 
-impl ChessPiece {
-    pub fn new() -> Self {
-        return ChessPiece {
-            piece_id: 0,
-            color: 0,
-            has_moved: false,
-            has_moved_two: false,
-        };
+impl Piece {
+    /// Return new piece.
+    fn new(id: i8, color: i8) -> Piece {
+        if color < -1 || color > 1 { panic!("Bad color..."); }
+
+        return Piece { id: id, team: color, moved: false, moved_twice: false };
     }
 
-    pub fn white(id: i8) -> ChessPiece {
-        return ChessPiece {
-            piece_id: id,
-            color: -1,
-            has_moved: false,
-            has_moved_two: false,
-        };
+    /// Get a white piece.
+    fn white(id: i8) -> Piece {
+        if id < 1 || id > 6 { panic!("Bad piece..."); }
+        return Self::new(id, -1);
     }
 
-    pub fn black(id: i8) -> ChessPiece {
-        return ChessPiece {
-            piece_id: id,
-            color: 1,
-            has_moved: false,
-            has_moved_two: false,
-        };
+    /// Get a black piece.
+    fn black(id: i8) -> Piece {
+        if id < 1 || id > 6 { panic!("Bad piece..."); }
+        return Self::new(id, 1);
+    }
+
+    /// Get an empty / dummy piece.
+    fn empty() -> Piece {
+        return Self::new(0, 0);
     }
 }
-/**
-### Chess board structure.
-## Fields:
-`game_end`: boolean that shows if the game has ended or not.
-*/
+
+#[derive(PartialEq, Clone, Copy)]
+enum Flags {
+    None = 0,
+    TwoSteps,
+    EnPassant,
+    Capture,
+    Kastling,
+    Qastling
+}
+
+/// Chess board structure.
 pub struct ChessBoard {
-    board: [ChessPiece; 64],
-    game_started: bool,
-    pub game_end: bool,
+    board: [[Piece; 8]; 8],
+    game_ended: bool,
     white_turn: bool,
-    en_passant: bool,
-    white_castling: (bool, bool),
-    black_castling: (bool, bool),
-    white_king_index: usize,
-    black_king_index: usize,
-    promotion: (bool, usize)
+    /// White castling, king side.
+    wkcr: bool,
+    /// White castling, queen side.
+    wqcr: bool,
+    /// Black castling, king side.
+    bkcr: bool,
+    /// Black castling, queen side.
+    bqcr: bool,
+    promoting: bool,
+    promoting_index: (usize, usize),
+    move_list: HashMap<(usize, usize), Vec<(usize, usize, Flags)>>
 }
 
 impl ChessBoard {
-    /**
-    ### Get a fresh chess board.
-    ## Returns:
-    New standard chess board with pieces.
-    */
-    pub fn new() -> Self {
-        let mut b: ChessBoard = ChessBoard {
-            board: [ChessPiece::new(); 64],
-            game_started: false,
-            game_end: false,
+    /// Get a new board.
+    pub fn new() -> ChessBoard {
+        let mut board = ChessBoard {
+            board: [[Piece::empty(); 8]; 8],
+            game_ended: false,
             white_turn: true,
-            en_passant: false,
-            white_castling: (true, true),
-            black_castling: (true, true),
-            white_king_index: 60,
-            black_king_index: 4,
-            promotion: (false, usize::MAX)
+            wkcr: true,
+            wqcr: true,
+            bkcr: true,
+            bqcr: true,
+            promoting: false,
+            promoting_index: (usize::MAX, usize::MAX),
+            move_list: HashMap::new()
         };
 
-        b.board[0] = ChessPiece::black(2);
-        b.board[1] = ChessPiece::black(3);
-        b.board[2] = ChessPiece::black(4);
-        b.board[3] = ChessPiece::black(5);
-        b.board[4] = ChessPiece::black(6);
-        b.board[5] = ChessPiece::black(4);
-        b.board[6] = ChessPiece::black(3);
-        b.board[7] = ChessPiece::black(2);
+        board.board[0][0] = Piece::black(2);
+        board.board[0][1] = Piece::black(3);
+        board.board[0][2] = Piece::black(4);
+        board.board[0][3] = Piece::black(5);
+        board.board[0][4] = Piece::black(6);
+        board.board[0][5] = Piece::black(4);
+        board.board[0][6] = Piece::black(3);
+        board.board[0][7] = Piece::black(2);
 
-        b.board[56] = ChessPiece::white(2);
-        b.board[57] = ChessPiece::white(3);
-        b.board[58] = ChessPiece::white(4);
-        b.board[59] = ChessPiece::white(5);
-        b.board[60] = ChessPiece::white(6);
-        b.board[61] = ChessPiece::white(4);
-        b.board[62] = ChessPiece::white(3);
-        b.board[63] = ChessPiece::white(2);
+        board.board[7][0] = Piece::white(2);
+        board.board[7][1] = Piece::white(3);
+        board.board[7][2] = Piece::white(4);
+        board.board[7][3] = Piece::white(5);
+        board.board[7][4] = Piece::white(6);
+        board.board[7][5] = Piece::white(4);
+        board.board[7][6] = Piece::white(3);
+        board.board[7][7] = Piece::white(2);
 
-        for i in 8..16 {
-            b.board[i] = ChessPiece::black(1);
-            b.board[i + 40] = ChessPiece::white(1);
+        for i in 0..8usize {
+            board.board[1][i] = Piece::black(1);
+            board.board[6][i] = Piece::white(1);
         }
 
-        return b;
+        board.gen_moves();
+
+        return board;
     }
 
-    ///### Reset the board.
+    /// Reset the board.
     pub fn reset(&mut self) {
         self.board = ChessBoard::new().board;
-        self.game_started = false;
-        self.game_end = false;
+        self.game_ended = false;
         self.white_turn = true;
-        self.white_castling = (true, true);
-        self.black_castling = (true, true);
-        self.white_king_index = 60;
-        self.black_king_index = 4;
-        self.promotion = (false, usize::MAX);
+        self.wkcr = true;
+        self.wqcr = true;
+        self.bkcr = true;
+        self.bqcr = true;
+        self.promoting = false;
+        self.promoting_index = (usize::MAX, usize::MAX);
+        self.move_list = HashMap::new();
     }
-    
-    /**
-    ### Get a copy of the board.
-    ## Returns:
-    A flat array of tuples with size 64. First element is the piece id, second is color.
+
+    /** 
+    Check if "it's joever."                             <br/>
+    Returns:                                            <br/>
+    `true` if the game has ended, otherwise `false`
     */
-    pub fn get_board(&self) -> [(i8, i8); 64] {
-        let mut b: [(i8, i8); 64] = [(0,0); 64];
-
-        for i in 0..64 {
-            b[i] = (self.board[i].piece_id, self.board[i].color);
-        }
-
-        return b;
-    }
+    pub fn is_game_ended(&self) -> bool { return self.game_ended; }
 
     /**
-    ### Check if the game has ended.
-    ## Returns:
-    `true` if a king is captured or is in checkmate, otherwise `false`.
+    Check if a pawn can be promoted.                            <br/>
+    Returns:                                                    <br/>
+    `true` if the a pawn can be promoted, otherwise `false`
     */
-    pub fn is_game_ended(&self) -> bool {
-        return self.game_end;
-    }
+    pub fn can_promote(&self) -> bool { return self.promoting; }
 
     /**
-    ### Check if a pawn can be promoted.
-    ## Returns:
-    `true` if a pawn can be promoted, otherwise `false`.
+    Get the team that is playing.                   <br/>
+    Returns:                                        <br/>
+    `true` if white is playing, otherwise `false`
     */
-    pub fn can_promote(&self) -> bool {
-        return self.promotion.0;
-    }
+    pub fn get_player(&self) -> bool { return self.white_turn; }
 
     /**
-    ### Try to promote a pawn.
-    ## Returns:
+    Try to promote a pawn.                              <br/>
+    Returns:                                            <br/>
     `true` if a pawn got promoted, otherwise `false`.
     */
     pub fn promote(&mut self, id: i8) -> bool {
-        if self.promotion.0 && id < 6 && id > 0 {
-            self.board[self.promotion.1].piece_id = id;
-            self.promotion = (false, usize::MAX);
-            self.update();
+        if self.promoting && id < 6 && id > 1 {
+            self.board[self.promoting_index.1][self.promoting_index.0].id = id;
+            self.promoting = false;
+            self.promoting_index = (usize::MAX, usize::MAX);
+            self.white_turn = !self.white_turn;
+            if self.gen_moves() { self.game_ended = true; }
             return true;
         }
         
@@ -162,1027 +161,523 @@ impl ChessBoard {
     }
 
     /**
-    ### Move a piece using algebraic notation.
-    The function moves the requested piece if nothing went wrong. <br>
-    This function converts the algebraic notation into indices and calls move by index.
-    ## Parameters:
-    `from`: two letter string, representing the piece you want to move. <br>
-    `to`: two letter string, representing the destination tile.
-    ## Returns:
-    `false` if anything goes wrong, otherwise `true`
-    ## Example:
-    `move_by_algebraic("e8", "e7")` would attempt to move a piece from e8 to e7.
+    Get a copy of the board.                                                            <br/>
+    Returns:                                                                            <br/>
+    A flat array of tuples with size 64. First element is the piece id, second is color.
     */
-    pub fn move_by_algebraic(&mut self, from: &str, to: &str) -> bool {
-        if from.is_empty() || from.len() > 2 {
-            println!("Piece to move was not provided...");
-            return false;
+    pub fn get_board(&self) -> [(i8, i8); 64] {
+        let mut b: [(i8, i8); 64] = [(0,0); 64];
+
+        for y in 0..8usize {
+            for x in 0..8usize {
+                b[y*8+x] = (self.board[y][x].id, self.board[y][x].team);
+            }            
         }
 
-        if to.is_empty() || to.len() > 2 {
-            println!("Destination was not provided...");
-            return false;
-        }
+        return b;
+    }
+
+    /** Move piece by algebraic notation.                          <br/>
+    Parameters:                                                    <br/>
+    `from`: File from A to H and rank from 1 to 8. Example: "b1"   <br/>
+    `to`: File from A to H and rank from 1 to 8. Example: "a3"     <br/>
+    Returns:                                                       <br/>
+    `true` on success, otherwise `false`
+    */
+    pub fn move_by_algebraic(&mut self, from: &str, to: &str) -> bool {
+        if from.is_empty() || from.len() > 2 || to.is_empty() || to.len() > 2 { return false; }
 
         let file_f = from.as_bytes()[0].to_ascii_lowercase() as i8;
         let rank_f = from.as_bytes()[1].to_ascii_lowercase() as i8;
         let file_t = to.as_bytes()[0].to_ascii_lowercase() as i8;
         let rank_t = to.as_bytes()[1].to_ascii_lowercase() as i8;
 
-        if file_f < 97 || file_f > 104 {
-            println!("Bad file: {}", from);
-            return false;
-        }
-        if rank_f < 49 || rank_f > 56 {
-            println!("Bad rank: {}", from);
-            return false;
-        }
-        if file_t < 97 || file_t > 104 {
-            println!("Bad file: {}", to);
-            return false;
-        }
-        if rank_t < 49 || rank_t > 56 {
-            println!("Bad rank: {}", to);
-            return false;
-        }
+        if file_f < 97 || file_f > 104 || rank_f < 49 || rank_f > 56 { return false; }
+        if file_t < 97 || file_t > 104 || rank_t < 49 || rank_t > 56 { return false; }
 
-        let from_index: i8 = file_f - 97 + (rank_f - 56).abs() * 8;
-        let to_index: i8 = file_t - 97 + (rank_t - 56).abs() * 8;
+        let from_: i8 = file_f - 97 + (rank_f - 56).abs() * 8;
+        let to_: i8 = file_t - 97 + (rank_t - 56).abs() * 8;
 
-        return self.move_by_index(from_index as usize, to_index as usize);
+        return self.move_by_index(from_ as usize, to_ as usize);
     }
 
-    /**
-    ### Move a piece using the boards indices.
-    The function moves the requested piece if nothing went wrong.
-    ## Important:
-    If a king is captured or a checkmate is detected, the `game_end` field is set to false.
-    ## Parameters:
-    `from`: number between 0 (inclusive) and 64, representing the piece you want to move. <br>
-    `to`: number between 0 (inclusive) and 64, representing the destination tile.
-    ## Returns:
-    `false` if anything goes wrong, otherwise `true`
-    ## Example:
-    `move_by_index(4, 12)` would attempt to move a piece from index 4 to 12, or e8 to e7 in algebraic notation.
+    /** Move piece by index.                <br/>
+    Parameters:                             <br/>
+    `from`: Index to move from 0 ≤ i < 64   <br/>
+    `to`: Index to move from 0 ≤ i < 64     <br/>
+    Returns:                                <br/>
+    `true` on success, otherwise `false`
     */
     pub fn move_by_index(&mut self, from: usize, to: usize) -> bool {
-        if self.promotion.0 {
+        if from > 63 || to > 63 || from == to { return false; }
+        if self.promoting { return false; }
+        let from_: (usize, usize) = ((from as i8 % 8) as usize, ((from as i8 - from as i8 % 8) / 8) as usize);
+        let to_: (usize, usize) = ((to as i8 % 8) as usize, ((to as i8 - to as i8 % 8) / 8) as usize);
+
+        if self.board[from_.1][from_.0].team == -1 && !self.white_turn { return false; }
+        if self.board[from_.1][from_.0].team ==  1 &&  self.white_turn { return false; }
+
+        let get = self.move_list.get(&from_);
+        let moves: &Vec<(usize, usize, Flags)>;
+
+        if get.is_some() {
+            moves = get.unwrap();
+        } else {
             return false;
         }
 
-        if from == to {
-            println!("Can't move to same tile...");
-            return false;
-        }
-
-        if !self.game_started && self.board[from].color == 1 {
-            println!("White goes first...");
-            return false;
-        }
-
-        if self.board[from].color == -1 && !self.white_turn {
-            println!("Black is supposed to play...");
-            return false;
-        }
-
-        if self.board[from].color == 1 && self.white_turn {
-            println!("White is supposed to play...");
-            return false;
-        }
-
-        if self.is_tile_empty(from) {
-            println!("Attempting to move from an empty tile...");
-            return false;
-        }
-
-        if from == 4 && to == 0 {
-            if self.attempt_castling(false, true) {
-                self.update();
-                return true;
-            }
-        }
-        if from == 4 && to == 7 {
-            if self.attempt_castling(false, false) {
-                self.update();
-                return true;
-            }
-        }
-        if from == 60 && to == 56 {
-            if self.attempt_castling(true, true) {
-                self.update();
-                return true;
-            }
-        }
-        if from == 60 && to == 63 {
-            if self.attempt_castling(true, false) {
-                self.update();
-                return true;
+        let mut move_type: Flags = Flags::None;
+        let mut found: bool = false;
+        for m in moves.iter() {
+            if m.0 == to_.0 && m.1 == to_.1 {
+                found = true;
+                move_type = m.2;
+                break;
             }
         }
 
-        if !self.is_move_legal(from, to, false) {
-            println!("Illegal move...");
-            return false;
+        if !found { return false; }
+
+        if move_type == Flags::Capture { self.board[to_.1][to_.0] = Piece::empty(); }
+        if move_type == Flags::TwoSteps { self.board[from_.1][from_.0].moved_twice = true; }
+        if move_type == Flags::EnPassant {
+            let team = self.board[from_.1][from_.0].team;
+            let ep = (to_.0, (to_.1 as i8 - team) as usize);
+            self.board[ep.1][ep.0] = Piece::empty();
         }
 
-        if self.board[from].piece_id == 6 {
-            if self.board[from].color == -1 {
-                self.white_king_index = to;
-                self.white_castling = (false, false);
-            } else {
-                self.black_king_index = to;
-                self.black_castling = (false, false);
+        if !self.board[from_.1][from_.0].moved { 
+            self.board[from_.1][from_.0].moved = true;
+
+            if self.board[from_.1][from_.0].id == 2 {
+                if self.board[from_.1][from_.0].team == -1 {
+                    if from_.0 == 0 { self.wqcr = false; }
+                    if from_.0 == 7 { self.wkcr = false; }
+                } else {
+                    if from_.0 == 0 { self.bqcr = false; }
+                    if from_.0 == 7 { self.bkcr = false; }
+                }
             }
-        }
 
-        if self.board[from].piece_id == 1 {
-            self.check_promotion(from, to);
+            if self.board[from_.1][from_.0].id == 6 && (move_type != Flags::Kastling && move_type != Flags::Qastling) {
+                if self.board[from_.1][from_.0].team == -1 {
+                    self.wqcr = false;
+                    self.wkcr = false;
+                } else {
+                    self.bqcr = false;
+                    self.bkcr = false;
+                }
+            }
         }
         
-        if self.board[to as usize].piece_id == 6 { self.game_end = true; }
+        if self.board[from_.1][from_.0].moved_twice && move_type != Flags::TwoSteps { self.board[from_.1][from_.0].moved_twice = false; }
 
-        if !self.is_tile_same_color(to, from) && self.en_passant {
-            self.en_passant = false;
-            self.board[(to as i8 - self.board[from].color * 8) as usize] = ChessPiece::new();
-        } else if !self.is_tile_same_color(to, from) {
-            self.board[to as usize] = ChessPiece::new();
+        // Handle castling.
+        if move_type == Flags::Kastling {
+            if self.wkcr && self.board[from_.1][from_.0].team == -1 {
+                let mut tmp = self.board[from_.1][from_.0];
+                self.board[from_.1][from_.0] = self.board[to_.1][to_.0];
+                self.board[to_.1][to_.0] = tmp;
+                tmp = self.board[7][7];
+                self.board[7][7] = self.board[7][5];
+                self.board[7][5] = tmp;
+                self.board[7][5].moved = true;
+
+                self.wkcr = false;
+                self.wqcr = false;
+            }
+
+            if self.bkcr && self.board[from_.1][from_.0].team == 1 {
+                let mut tmp = self.board[from_.1][from_.0];
+                self.board[from_.1][from_.0] = self.board[to_.1][to_.0];
+                self.board[to_.1][to_.0] = tmp;
+                tmp = self.board[0][7];
+                self.board[0][7] = self.board[0][5];
+                self.board[0][5] = tmp;
+                self.board[0][5].moved = true;
+
+                self.bkcr = false;
+                self.bqcr = false;
+            }
+        } else if move_type == Flags::Qastling {
+            if self.wqcr && self.board[from_.1][from_.0].team == -1 {
+                let mut tmp = self.board[from_.1][from_.0];
+                self.board[from_.1][from_.0] = self.board[to_.1][to_.0];
+                self.board[to_.1][to_.0] = tmp;
+                tmp = self.board[7][0];
+                self.board[7][0] = self.board[7][3];
+                self.board[7][3] = tmp;
+                self.board[7][3].moved = true;
+
+                self.wkcr = false;
+                self.wqcr = false;
+            }
+
+            if self.bqcr && self.board[from_.1][from_.0].team == 1 {
+                let mut tmp = self.board[from_.1][from_.0];
+                self.board[from_.1][from_.0] = self.board[to_.1][to_.0];
+                self.board[to_.1][to_.0] = tmp;
+                tmp = self.board[0][0];
+                self.board[0][0] = self.board[0][3];
+                self.board[0][3] = tmp;
+                self.board[0][3].moved = true;
+
+                self.bkcr = false;
+                self.bqcr = false;
+            }
+        } else {
+            let tmp = self.board[from_.1][from_.0];
+            self.board[from_.1][from_.0] = self.board[to_.1][to_.0];
+            self.board[to_.1][to_.0] = tmp;
         }
 
-        self.board.swap(from as usize, to as usize);
-        self.update();
-
-        return true;
-    }
-
-    /**
-    ### Determines if requested move is legal.
-    ## Parameters:
-    from: number between 0 (inclusive) and 64, representing the piece you want to move. <br>
-    to: number between 0 (inclusive) and 64, representing the destination tile.
-    ## Returns:
-    `false` if no legal move was found, otherwise `true`
-    */
-    fn is_move_legal(&mut self, from: usize, to: usize, sim: bool) -> bool {
-        match self.board[from].piece_id {
-            1 => {
-                return self.check_pawn_move(from, to, sim);
-            }
-            2 => {
-                return self.check_rook_move(from, to);
-            }
-            3 => {
-                return self.check_knight_move(from, to);
-            }
-            4 => {
-                return self.check_bishop_move(from, to);
-            }
-
-            5 => {
-                return self.check_bishop_move(from, to) || self.check_rook_move(from, to);
-            }
-            6 => {
-                return self.check_king_move(from, to);
-            }
-
-            _ => {
-                return false;
-            }
-        }
-    }
-
-    /**
-    ### Determines if the pawn move is legal.
-    ## Parameters:
-    from: number between 0 (inclusive) and 64, representing the piece you want to move. <br>
-    to: number between 0 (inclusive) and 64, representing the destination tile.
-    ## Returns:
-    `false` if the move was illegal, otherwise `true`
-    */
-    fn check_pawn_move(&mut self, from: usize, to: usize, sim: bool) -> bool {
-        if !self.board[from].has_moved
-            && to as i8 == from as i8 + self.board[from].color * 16i8
-            && self.is_tile_empty(to)
+        // Has a pawn reached the other side?
+        if self.board[to_.1][to_.0].id == 1 && ((self.board[to_.1][to_.0].team == -1 && to_.1 == 0) || (self.board[to_.1][to_.0].team == 1 && to_.1 == 7))
         {
-            self.board[from].has_moved = true;
-            self.board[from].has_moved_two = true;
+            self.promoting = true;
+            self.promoting_index = to_;
             return true;
         }
 
-        if self.board[from].color == 1 {
-            if to as i8 > from as i8 + 9 || (to as i8) < (from as i8 + 7) {
-                return false;
-            }
-        } else {
-            if to as i8 > from as i8 - 7 || (to as i8) < (from as i8 - 9) {
-                return false;
-            }
-        }
-
-        if !self.check_en_passant(from, to, sim)
-            && (self.is_tile_empty(to) || self.is_tile_same_color(to, from))
-            && to as i8 != from as i8 + self.board[from].color * 8
-        {
-            return false;
-        }
-
-        if to as i8 == from as i8 + self.board[from].color * 8 && !self.is_tile_empty(to) {
-            return false;
-        }
-
-        if self.board[from].has_moved_two {
-            self.board[from].has_moved_two = false;
-        }
-        self.board[from].has_moved = true;
-
+        self.white_turn = !self.white_turn;
+        if self.gen_moves() { self.game_ended = true; }
+        
         return true;
     }
-
     /**
-    ### Determines if the rook move is legal.
-    ## Parameters:
-    from: number between 0 (inclusive) and 64, representing the piece you want to move. <br>
-    to: number between 0 (inclusive) and 64, representing the destination tile.
-    ## Returns:
-    `false` if the move was illegal, otherwise `true`
+    Generate moves for current team.                                            <br/>
+    Returns:                                                                    <br/>
+    `true` if movelist is empty, equivalent to a checkmate, otherwise `false`
     */
-    fn check_rook_move(&mut self, from: usize, to: usize) -> bool {
-        let file: i8 = self.index_file(from as i8);
-        let rank: i8 = self.index_rank(from as i8);
-        let t_file: i8 = self.index_file(to as i8);
-        let t_rank: i8 = self.index_rank(to as i8);
+    fn gen_moves(&mut self) -> bool {
+        self.move_list.clear();
 
-        if (file != t_file && rank != t_rank) || self.is_tile_same_color(to, from) {
-            return false;
-        }
+        let team: i8 = if self.white_turn { -1 } else { 1 };
+        let mut team_indices: Vec<(usize, usize)> = vec![];
 
-        let dir: i8 = if file == t_file {
-            (t_rank - rank).signum() * 8
-        } else {
-            (t_file - file).signum()
-        };
-
-        let mut i: i8 = from as i8 + dir;
-
-        while i != to as i8 {
-            if !self.is_tile_empty(i as usize) {
-                return false;
+        for y in 0..8usize {
+            for x in 0..8usize {
+                if self.board[y][x].team == team { team_indices.push((x,y)); }
             }
-            i += dir;
         }
 
-        if self.is_tile_same_color(to, from) {
-            return false;
+        // This should not happen.
+        if team_indices.is_empty() { 
+            self.game_ended = true; 
+            panic!("No pieces in team. This should not happen...");    
         }
 
-        return true;
-    }
-
-    /**
-    ### Determines if the knight move is legal.
-    ## Parameters:
-    from: number between 0 (inclusive) and 64, representing the piece you want to move. <br>
-    to: number between 0 (inclusive) and 64, representing the destination tile.
-    ## Returns:
-    `false` if the move was illegal, otherwise `true`
-    */
-    fn check_knight_move(&mut self, from: usize, to: usize) -> bool {
-        let file: i8 = self.index_file(from as i8);
-        let rank: i8 = self.index_rank(from as i8);
-        let mut indices: [i8; 8] = [
-            from as i8 - 17i8,
-            from as i8 - 15i8,
-            from as i8 - 10i8,
-            from as i8 - 6i8,
-            from as i8 + 17i8,
-            from as i8 + 15i8,
-            from as i8 + 10i8,
-            from as i8 + 6i8,
-        ];
-
-        if file < 2 {
-            indices[2] = i8::MAX;
-            indices[7] = i8::MAX;
-        }
-        if file < 1 {
-            indices[0] = i8::MAX;
-            indices[5] = i8::MAX;
-        }
-        if file > 5 {
-            indices[3] = i8::MAX;
-            indices[6] = i8::MAX;
-        }
-        if file > 6 {
-            indices[1] = i8::MAX;
-            indices[4] = i8::MAX;
-        }
-
-        if rank < 2 {
-            indices[0] = i8::MAX;
-            indices[1] = i8::MAX;
-        }
-        if rank < 1 {
-            indices[2] = i8::MAX;
-            indices[3] = i8::MAX;
-        }
-        if rank > 5 {
-            indices[4] = i8::MAX;
-            indices[5] = i8::MAX;
-        }
-        if rank > 6 {
-            indices[6] = i8::MAX;
-            indices[7] = i8::MAX;
-        }
-
-        if !indices.contains(&(to as i8)) || self.is_tile_same_color(to, from) {
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-    ### Determines if the bishop move is legal.
-    ## Parameters:
-    from: number between 0 (inclusive) and 64, representing the piece you want to move. <br>
-    to: number between 0 (inclusive) and 64, representing the destination tile.
-    ## Returns:
-    `false` if the move was illegal, otherwise `true`
-    */
-    fn check_bishop_move(&mut self, from: usize, to: usize) -> bool {
-        let dir: i8 = (self.index_rank(to as i8) - self.index_rank(from as i8)).signum() * 8;
-        let step: i8 = (self.index_file(to as i8) - self.index_file(from as i8)).signum();
-
-        if dir == 0 || step == 0 {
-            return false;
-        }
-
-        let mut i = from as i8 + dir + step;
-        let mut last_file = self.index_file(from as i8);
-        let mut last_rank = self.index_rank(from as i8);
-
-        while i >= 0 && i < 64 {
-            if i == to as i8 && !self.is_tile_same_color(from, to) {
-                return true;
-            }
+        for i in team_indices.iter() {
+            let current_index: (i8, i8) = (i.0 as i8, i.1 as i8);
+            let mut moves: Vec<(usize, usize, Flags)> = vec![];
             
-            if (last_file - self.index_file(i)).abs() != 1i8 || (last_rank - self.index_rank(i)).abs() != 1i8 {
-                return false;
+            match self.board[i.1][i.0].id {
+                1 => { moves.append(&mut self.gen_pawn_move(current_index, team)); }
+                2 => { moves.append(&mut self.gen_rook_move(current_index, team)); }
+                3 => { moves.append(&mut self.gen_knight_move(current_index, team)); }
+                4 => { moves.append(&mut self.gen_bishop_move(current_index, team)); }
+                5 => { moves.append(&mut self.gen_queen_move(current_index, team)); }
+                6 => { moves.append(&mut self.gen_king_move(current_index, team)); }
+
+                _ => { }
             }
 
-            if !self.is_tile_empty(i as usize) {
-                return false;
-            }
-
-            last_file = self.index_file(i);
-            last_rank = self.index_rank(i);
-            i += dir + step;
+            self.move_list.insert(i.to_owned(), moves);
         }
 
-        return false;
+        self.validate_moves(team);
+
+        return self.move_list.is_empty();
     }
 
-    /**
-    ### Determines if the king move is legal.
-    ## Note:
-    If the move was legal, all castling rights are revoked to corresponding team.
-    ## Parameters:
-    from: number between 0 (inclusive) and 64, representing the piece you want to move. <br>
-    to: number between 0 (inclusive) and 64, representing the destination tile.
-    ## Returns:
-    `false` if the move was illegal, otherwise `true`
-    */
-    fn check_king_move(&mut self, from: usize, to: usize) -> bool {
-        let file: i8 = self.index_file(from as i8);
-        let rank: i8 = self.index_rank(from as i8);
+    /// Validate generated moves.
+    /// TODO:
+    /// Fix to use indices.
+    fn validate_moves(&mut self, team: i8) {
+        let mut bad_moves: Vec<(usize, usize, usize)> = vec![];
+        let mut king_indices: (usize, usize) = (usize::MAX, usize::MAX);
 
-        let mut i: i8 = -9;
-        while i <= 9 {
-            if i == -6 {
-                i = -1;
-            }
-            if i == 2 {
-                i = 7;
-            }
-
-            let current_index = i + from as i8;
-
-            if current_index > 63 || current_index < 0 {
-                i += 1;
-                continue;
-            }
-            if (self.index_file(current_index) - file).abs() > 1
-                || (self.index_rank(current_index) - rank).abs() > 1
-            {
-                i += 1;
-                continue;
-            }
-
-            if current_index == to as i8 && !self.is_tile_same_color(to, from) {
-                let white_king: bool = self.board[from].color == -1;
-                if self.simulate_check(white_king, to) {
-                    return false;
+        for y in 0..8usize {
+            for x in 0..8usize {
+                if self.board[y][x].team == team && self.board[y][x].id == 6 { 
+                    king_indices = (x, y);
+                    break;
                 }
-
-                return true;
-            }
-
-            i += 1;
-        }
-
-        return false;
-    }
-
-    /**
-    ### Determines if a king would be checked at an index.
-    ## Parameters:
-    `white`: Calculate for white (`true`) king or black (`false`) king.
-    `index`: The index to test for.
-    ## Returns:
-    `true` if the king would be in check, otherwise `false`.
-    */
-    fn simulate_check(&mut self, white: bool, index: usize) -> bool {
-        let test_color: i8 = if white { 1 } else { -1 };
-
-        for i in 0..64 {
-            if self.board[i].piece_id == 0 || self.board[i].color != test_color {
-                continue;
-            }
-            if self.is_move_legal(i, index, true) {
-                return true;
             }
         }
 
-        return false;
-    }
+        if king_indices == (usize::MAX, usize::MAX) {
+            panic!("This shouldn't happen...");
+        }
 
-    /**
-    ### Determines if a king would be checkmated at an index.
-    ## Parameters:
-    `white`: Calculate for white (`true`) king or black (`false`) king.
-    `index`: The index to test for.
-    ## Returns:
-    `true` if the king would be in checkmate, otherwise `false`.
-    */
-    fn simulate_checkmate(&mut self, white: bool, index: usize) -> bool {
-        let mut ways_out: std::vec::Vec<i8> = vec![];
-        let file: i8 = self.index_file(index as i8);
-        let rank: i8 = self.index_rank(index as i8);
-        let mut invalid_counter: i8 = 0;
+        for k in self.move_list.iter() {
+            let v = k.1;
 
-        let mut i: i8 = -9;
-        while i <= 9 {
-            if i == -6 {
-                i = -1;
-            }
-            if i == 2 {
-                i = 7;
-            }
+            for (index, m) in v.iter().enumerate() {
+                let p0 = self.board[k.0.1][k.0.0];
+                let p1 = self.board[m.1][m.0];
+                let mut ki = king_indices;
 
-            let current_index: i8 = i + index as i8;
-
-            if i == 0 {
-                if !self.simulate_check(white, current_index as usize) {
-                    ways_out.push(current_index);
-                }
-                i += 1;
-                continue;
-            }
-
-            if current_index > 63 || current_index < 0 {
-                invalid_counter += 1;
-                i += 1;
-                continue;
-            }
-            if (self.index_file(current_index) - file).abs() > 1
-                || (self.index_rank(current_index) - rank).abs() > 1
-            {
-                invalid_counter += 1;
-                i += 1;
-                continue;
-            }
-
-            if self.is_tile_same_color(current_index as usize, index) {
-                invalid_counter += 1;
-                i += 1;
-                continue;
-            }
-
-            let tmp: ChessPiece = self.board[current_index as usize].clone();
-
-            self.board[current_index as usize] = ChessPiece::new();
-            self.board.swap(index, current_index as usize);
+                if p0.id == 6 { ki = (m.0, m.1); }
                 
+                // Swap
+                if m.2 == Flags::Capture { self.board[m.1][m.0] = Piece::empty() }
+                let tmp = self.board[m.1][m.0];
+                self.board[m.1][m.0] = self.board[k.0.1][k.0.0];
+                self.board[k.0.1][k.0.0] = tmp;
 
-            if !self.simulate_check(white, current_index as usize) {
-                ways_out.push(current_index);
+                // Enemy tries to kill the king.
+                // Get moves on new board.
+                let mut enemy_moves: HashMap<(usize, usize), Vec<(usize, usize, Flags)>> = HashMap::new();
+                let mut enemy_indices: Vec<(usize, usize)> = vec![];
+
+                for y in 0..8usize {
+                    for x in 0..8usize {
+                        if self.board[y][x].team == -team { enemy_indices.push((x,y)); }
+                    }
+                }
+
+                for i in enemy_indices.iter() {
+                    let current_index: (i8, i8) = (i.0 as i8, i.1 as i8);
+                    let mut moves: Vec<(usize, usize, Flags)> = vec![];
+                    
+                    match self.board[i.1][i.0].id {
+                        1 => { moves.append(&mut self.gen_pawn_move(current_index, -team)); }
+                        2 => { moves.append(&mut self.gen_rook_move(current_index, -team)); }
+                        3 => { moves.append(&mut self.gen_knight_move(current_index, -team)); }
+                        4 => { moves.append(&mut self.gen_bishop_move(current_index, -team)); }
+                        5 => { moves.append(&mut self.gen_queen_move(current_index, -team)); }
+                        6 => { moves.append(&mut self.gen_king_move(current_index, -team)); }
+        
+                        _ => { }
+                    }
+        
+                    enemy_moves.insert(i.to_owned(), moves);
+                }
+
+                for ek in enemy_moves.iter() {
+                    let ev = ek.1;
+
+                    for em in ev {
+                        if em.0 == ki.0 && em.1 == ki.1 && !bad_moves.contains(&(k.0.0, k.0.1, index)) {
+                            bad_moves.push((k.0.0, k.0.1, index));
+                            break;
+                        }
+                    }
+                }
+                
+                // Swap back
+                self.board[k.0.1][k.0.0] = p0;
+                self.board[m.1][m.0] = p1;
             }
-
-            self.board.swap(index, current_index as usize);
-            self.board[current_index as usize] = tmp;
-
-            i += 1;
         }
 
-        if invalid_counter == 9 {
-            return false;
+        // Delete all bad moves.
+        for bm in bad_moves.iter() {
+            self.move_list.get_mut(&(bm.0, bm.1)).unwrap()[bm.2] = (usize::MAX, usize::MAX, Flags::None);
+        }
+
+        for k in self.move_list.iter_mut() {
+            k.1.retain(|&m| m.0 != usize::MAX && m.1 != usize::MAX);
+        }
+
+        self.move_list.retain(|&_, v| !v.is_empty());
+    }
+
+    /// Generate pawn moves.
+    fn gen_pawn_move(&self, index: (i8, i8), team: i8) -> Vec<(usize, usize, Flags)> {
+        let kernel: [(i8, i8); 4] = [(0, 1 * team), (0, 2 * team), (-1, 1 * team), (1, 1 * team)];
+        let mut moves: Vec<(usize, usize, Flags)> = vec![];
+
+        // Forward move.
+        if self.within_board((index.0 + kernel[0].0, index.1 + kernel[0].1)) &&
+           self.empty_tile(((index.0 + kernel[0].0) as usize, (index.1 + kernel[0].1) as usize)) {
+
+            moves.push(((index.0 + kernel[0].0) as usize, (index.1 + kernel[0].1) as usize, Flags::None));
+        }
+
+        // Double forward move.
+        if self.within_board((index.0 + kernel[1].0, index.1 + kernel[1].1)) &&
+           !self.board[index.1 as usize][index.0 as usize].moved &&
+           self.empty_tile(((index.0 + kernel[1].0) as usize, (index.1 + kernel[1].1) as usize)) {
+
+            moves.push(((index.0 + kernel[1].0) as usize, (index.1 + kernel[1].1) as usize, Flags::TwoSteps));
+        }
+
+        // Diagonals
+        if self.within_board((index.0 + kernel[2].0, index.1 + kernel[2].1)) &&
+           self.enemy_tile(((index.0 + kernel[2].0) as usize, (index.1 + kernel[2].1) as usize), team) {
+
+            moves.push(((index.0 + kernel[2].0) as usize, (index.1 + kernel[2].1) as usize, Flags::Capture));
+        }
+
+        if self.within_board((index.0 + kernel[3].0, index.1 + kernel[3].1)) &&
+           self.enemy_tile(((index.0 + kernel[3].0) as usize, (index.1 + kernel[3].1) as usize), team) {
+
+            moves.push(((index.0 + kernel[3].0) as usize, (index.1 + kernel[3].1) as usize, Flags::Capture));
+        }
+
+        // En passant
+        if self.within_board((index.0 + kernel[2].0, index.1 + kernel[2].1)) &&
+           self.empty_tile(((index.0 + kernel[2].0) as usize, (index.1 + kernel[2].1) as usize)) &&
+           self.enemy_tile(((index.0 + kernel[2].0) as usize, (index.1 + kernel[2].1 - team) as usize), team) &&
+           self.board[(index.1 + kernel[2].1 - team) as usize][(index.0 + kernel[2].0) as usize].moved_twice {
+
+            moves.push(((index.0 + kernel[2].0) as usize, (index.1 + kernel[2].1) as usize, Flags::EnPassant));
+        }
+
+        if self.within_board((index.0 + kernel[3].0, index.1 + kernel[3].1)) &&
+           self.empty_tile(((index.0 + kernel[3].0) as usize, (index.1 + kernel[3].1) as usize)) &&
+           self.enemy_tile(((index.0 + kernel[3].0) as usize, (index.1 + kernel[3].1 - team) as usize), team) &&
+           self.board[(index.1 + kernel[3].1 - team) as usize][(index.0 + kernel[3].0) as usize].moved_twice {
+
+            moves.push(((index.0 + kernel[3].0) as usize, (index.1 + kernel[3].1) as usize, Flags::EnPassant));
+        }
+
+        return moves;
+    }
+
+    // Generate rook moves.
+    fn gen_rook_move(&self, index: (i8, i8), team: i8) -> Vec<(usize, usize, Flags)> {
+        let kernel: [(i8, i8); 4] = [(1, 0), (0, 1), (-1, 0), (0, -1)];
+        let mut moves: Vec<(usize, usize, Flags)> = vec![];
+
+        for k in kernel.iter() {
+            let mut d: (i8, i8) = (index.0 + k.0, index.1 + k.1);
+
+            while self.within_board(d) {
+                if self.enemy_tile((d.0 as usize, d.1 as usize), team) {
+                    moves.push((d.0 as usize, d.1 as usize, Flags::Capture));
+                    break;
+                } else if self.empty_tile((d.0 as usize, d.1 as usize)) {
+                    moves.push((d.0 as usize, d.1 as usize, Flags::None));
+                } else {
+                    break;
+                }
+
+                d = (d.0 + k.0, d.1 + k.1);
+            }
+        }
+
+        return moves;
+    }
+
+    // Generate knight moves.
+    fn gen_knight_move(&self, index: (i8, i8), team: i8) -> Vec<(usize, usize, Flags)> {
+        let kernel: [(i8, i8); 8] = [(2, 1), (2, -1), (-2, 1), (-2, -1), (1, 2), (-1, 2), (1, -2), (-1, -2)];
+        let mut moves: Vec<(usize, usize, Flags)> = vec![];
+        
+        for k in kernel.iter() {
+            let d: (i8, i8) = (index.0 + k.0, index.1 + k.1);
+            if self.within_board(d) {
+                if self.enemy_tile((d.0 as usize, d.1 as usize), team) {
+                    moves.push((d.0 as usize, d.1 as usize, Flags::Capture));
+                } else if self.empty_tile((d.0 as usize, d.1 as usize)) {
+                    moves.push((d.0 as usize, d.1 as usize, Flags::None));
+                }
+            }
+        }
+
+        return moves;
+    }
+
+    // Generate bishop moves.
+    fn gen_bishop_move(&self, index: (i8, i8), team: i8) -> Vec<(usize, usize, Flags)> {
+        let kernel: [(i8, i8); 4] = [(1, 1), (-1, 1), (1, -1), (-1, -1)];
+        let mut moves: Vec<(usize, usize, Flags)> = vec![];
+
+        for k in kernel.iter() {
+            let mut d: (i8, i8) = (index.0 + k.0, index.1 + k.1);
+
+            while self.within_board(d) {
+                if self.enemy_tile((d.0 as usize, d.1 as usize), team) {
+                    moves.push((d.0 as usize, d.1 as usize, Flags::Capture));
+                    break;
+                } else if self.empty_tile((d.0 as usize, d.1 as usize)) {
+                    moves.push((d.0 as usize, d.1 as usize, Flags::None));
+                } else {
+                    break;
+                }
+
+                d = (d.0 + k.0, d.1 + k.1);
+            }
+        }
+
+        return moves;
+    }
+
+    // Generate queen moves.
+    fn gen_queen_move(&self, index: (i8, i8), team: i8) -> Vec<(usize, usize, Flags)> {
+        let mut moves: Vec<(usize, usize, Flags)> = vec![];
+        moves.append(&mut self.gen_rook_move(index, team));
+        moves.append(&mut self.gen_bishop_move(index, team));
+
+        return moves;
+    }
+
+    // Generate king moves.
+    fn gen_king_move(&self, index: (i8, i8), team: i8) -> Vec<(usize, usize, Flags)> {
+        let kernel: [(i8, i8); 8] = [(1, 0), (1, -1), (0, -1), (-1, -1), (-1, 0), (1, 1), (0, 1), (-1, 1)];
+        let mut moves: Vec<(usize, usize, Flags)> = vec![];
+
+        for k in kernel.iter() {
+            let d: (i8, i8) = (index.0 + k.0, index.1 + k.1);
+
+            if self.within_board(d) {
+                if self.enemy_tile((d.0 as usize, d.1 as usize), team) {
+                    moves.push((d.0 as usize, d.1 as usize, Flags::Capture));
+                } else if self.empty_tile((d.0 as usize, d.1 as usize)) {
+                    moves.push((d.0 as usize, d.1 as usize, Flags::None));
+                }
+            }
+        }
+
+        let r: usize = if team == -1 { 7 } else { 0 };
+        if r == 7 {
+            if self.wqcr && self.empty_tile((1, r)) && self.empty_tile((2, r)) && self.empty_tile((3, r)) { moves.push((2, r, Flags::Qastling)); } 
+            if self.wkcr && self.empty_tile((5, r)) && self.empty_tile((6, r)) { moves.push((6, r, Flags::Kastling)); }
         } else {
-            return ways_out.is_empty();
+            if self.bqcr && self.empty_tile((1, r)) && self.empty_tile((2, r)) && self.empty_tile((3, r)) { moves.push((2, r, Flags::Qastling)); } 
+            if self.bkcr && self.empty_tile((5, r)) && self.empty_tile((6, r)) { moves.push((6, r, Flags::Kastling)); }
         }
+
+        return moves;
     }
 
-    /**
-    ### Determines if the pawn can perform an "<i>en passant</i>" capture.
-    ## Parameters:
-    from: number between 0 (inclusive) and 64, representing the piece you want to move. <br>
-    to: number between 0 (inclusive) and 64, representing the destination tile.
-    ## Returns:
-    `false` if the move was illegal, otherwise `true`
-    */
-    fn check_en_passant(&mut self, from: usize, to: usize, sim: bool) -> bool {
-        if sim { return false; }
-        let piece: &ChessPiece = &self.board[from];
-        if to as i8 - piece.color * 8 < 8 || to as i8 - piece.color * 8 > 55 {
-            return false;
-        }
-        let target: &ChessPiece = &self.board[(to as i8 - piece.color * 8) as usize];
+    /// Check if tile is empty.
+    fn empty_tile(&self, indices: (usize, usize)) -> bool { return self.board[indices.1][indices.0].id == 0; }
 
-        if target.piece_id != 1 || piece.color == target.color {
-            return false;
-        }
-        if !target.has_moved_two {
-            return false;
-        }
+    /// Check if tile is enemy tile.
+    fn enemy_tile(&self, indices: (usize, usize), team: i8) -> bool { return self.board[indices.1][indices.0].team == -team; }
 
-        self.en_passant = true;
-        return true;
-    }
+    /// Check if indices are within board bounds.
+    fn within_board(&self, indices: (i8, i8)) -> bool { return indices.0 < 8 && indices.0 > -1 && indices.1 < 8 && indices.1 > -1 }
 
-    /**
-    ### Determines if a pawn shall be promoted.
-    */
-    fn check_promotion(&mut self, from: usize, to: usize) {
-        if self.promotion.0 { return; }
-
-        if self.board[from].color == 1 && to > 55 {
-            self.promotion = (true, to);
-        }
-
-        if self.board[from].color == -1 && to < 8 {
-            self.promotion = (true, to);
-        }
-
-        if self.promotion.0 {
-            println!("A pawn can be promoted...");
-        }
-    }
-
-    /**
-    ### Update castling rights.
-    If a rook moved, castling rights are revoked from either the king side or queen side.
-    ## Note:
-    Doesn't update for the king, since the `check_king_move()` function already does that.
-    */
-    fn update_castling_rights(&mut self) {
-        if self.board[56].piece_id != 2 && self.board[60].piece_id == 6 {
-            self.white_castling.0 = false;
-        }
-        if self.board[63].piece_id != 2 && self.board[60].piece_id == 6 {
-            self.white_castling.1 = false;
-        }
-        if self.board[0].piece_id != 2 && self.board[4].piece_id == 6 {
-            self.black_castling.0 = false;
-        }
-        if self.board[7].piece_id != 2 && self.board[4].piece_id == 6 {
-            self.black_castling.1 = false;
-        }
-    }
-
-    /**
-    ### Attempts to perform castling.
-    ## Returns:
-    `false` if anything went wrong (no rights, something was in the way), otherwise `true`
-    */
-    fn attempt_castling(&mut self, white: bool, queen_side: bool) -> bool {
-        if white && queen_side && !self.white_castling.0 {
-            return false;
-        }
-        if white && !queen_side && !self.white_castling.1 {
-            return false;
-        }
-        if !white && queen_side && !self.black_castling.0 {
-            return false;
-        }
-        if !white && !queen_side && !self.black_castling.1 {
-            return false;
-        }
-
-        let king_pos: i8 = if white { 60 } else { 4 };
-        let steps: i8 = if queen_side { 4 } else { 3 };
-        let dir: i8 = if queen_side { -1 } else { 1 };
-
-        if self.simulate_check(white, king_pos as usize) { return false; }
-
-        for i in 1..steps {
-            if !self.is_tile_empty((king_pos + i * dir) as usize) {
-                return false;
-            }
-        }
-
-        if queen_side {
-            if self.simulate_check(white, (king_pos - 2) as usize) { return false; }
-            self.board.swap(king_pos as usize, (king_pos - 2) as usize);
-            self.board.swap((king_pos - steps) as usize, (king_pos - 1) as usize);
-            if white {
-                self.white_king_index = (king_pos - 2) as usize;
-            } else {
-                self.black_king_index = (king_pos - 2) as usize;
-            }
-        } else {
-            if self.simulate_check(white, (king_pos + 2) as usize) { return false; }
-            self.board.swap(king_pos as usize, (king_pos + 2) as usize);
-            self.board.swap((king_pos + steps) as usize, (king_pos + 1) as usize);
-            if white {
-                self.white_king_index = (king_pos + 2) as usize;
-            } else {
-                self.black_king_index = (king_pos + 2) as usize;
-            }
-        }
-
-        if white {
-            self.white_castling = (false, false);
-        } else {
-            self.black_castling = (false, false);
-        }
-
-        return true;
-    }
-
-    /**
-    ### Update the game state.
-    ## Note:
-    Calls `update_castling_rights()` as well.
-    */
-    fn update(&mut self) {
-        if !self.promotion.0 {
-            self.white_turn = !self.white_turn;
-        }
-
-        if !self.game_started {
-            self.game_started = true;
-        }
-        self.update_castling_rights();
-
-        if self.simulate_checkmate(true, self.white_king_index)
-            || self.simulate_checkmate(false, self.black_king_index)
-        {
-            println!("A king is checkmated...");
-            self.game_end = true;
-        }
-    }
-
-    ///### Check if a tile is empty.
-    fn is_tile_empty(&self, index: usize) -> bool {
-        return self.board[index].piece_id == 0;
-    }
-
-    ///### Check if the tile has a piece with the same color as requested.
-    fn is_tile_same_color(&self, index: usize, piece_index: usize) -> bool {
-        return self.board[index].color == self.board[piece_index].color;
-    }
-
-    ///### Convert index to file.
-    fn index_file(&self, index: i8) -> i8 {
-        return index % 8;
-    }
-
-    ///### Convert index to rank.
-    fn index_rank(&self, index: i8) -> i8 {
-        return (index - (index % 8)) / 8;
-    }
-
-    ///### Print the chess board.
-    pub fn print(&mut self) {
-        let colors: [&str; 2] = ["30;47;1", "47;40;1"];
-
-        print!("\x1b[38;5;130;1m+----------------+\n|\x1b[0m");
-        for i in 0..64 {
-            let index: usize = self.board[i].color.clamp(0, 1) as usize;
-
-            if self.board[i].piece_id != 0 {
-                print!(
-                    "\x1b[{}m{} \x1b[0m",
-                    colors[index],
-                    self.id_to_char(self.board[i].piece_id)
+    /// Print the board to the terminal.
+    pub fn print(&self) {
+        for y in 0..8usize {
+            for x in 0..8usize {
+                let col = if self.board[y][x].team == -1 { "32;49" } else { "31;49" };
+                print!("\x1b[{}m{}\x1b[0m ", col,
+                    match self.board[y][x].id {
+                        1 => { "P" }
+                        2 => { "R" }
+                        3 => { "k" }
+                        4 => { "B" }
+                        5 => { "Q" }
+                        6 => { "K" }
+                        _ => { " " }
+                    }
                 );
-            } else {
-                print!("  ");
             }
-
-            if (i + 1) % 8 == 0 {
-                print!("\x1b[38;5;130m|\n|\x1b[0m");
-            }
+            print!("\n");
         }
-        print!("\x1b[38;5;130m\r+----------------+\x1b[0m\n\n");
-    }
-
-    ///### Convert piece id to corresponding character.
-    fn id_to_char(&self, id: i8) -> char {
-        match id {
-            1 => return 'P',
-            2 => return 'R',
-            3 => return 'k',
-            4 => return 'B',
-            5 => return 'Q',
-            6 => return 'K',
-
-            _ => {
-                return ' ';
-            }
-        }
+        print!("\n\n");
     }
 }
 
+
 #[cfg(test)]
 mod tests {
-    use crate::{ChessBoard, ChessPiece};
-    #[test]
-    fn black_pawns() {
-        let mut board = ChessBoard::new();
-        assert!(board.check_pawn_move( 8, 16, false));
-        assert!(board.check_pawn_move( 9, 17, false));
-        assert!(board.check_pawn_move(10, 18, false));
-        assert!(board.check_pawn_move(11, 19, false));
-        assert!(board.check_pawn_move(12, 20, false));
-        assert!(board.check_pawn_move(13, 21, false));
-        assert!(board.check_pawn_move(14, 22, false));
-        assert!(board.check_pawn_move(15, 23, false));
-
-        board.reset();
-        assert!(board.check_pawn_move( 8, 24, false));
-        assert!(board.check_pawn_move( 9, 25, false));
-        assert!(board.check_pawn_move(10, 26, false));
-        assert!(board.check_pawn_move(11, 27, false));
-        assert!(board.check_pawn_move(12, 28, false));
-        assert!(board.check_pawn_move(13, 29, false));
-        assert!(board.check_pawn_move(14, 30, false));
-        assert!(board.check_pawn_move(15, 31, false));
-    }
-
-    #[test]
-    fn white_pawns() {
-        let mut board = ChessBoard::new();
-        assert!(board.check_pawn_move(48, 40, false));
-        assert!(board.check_pawn_move(49, 41, false));
-        assert!(board.check_pawn_move(50, 42, false));
-        assert!(board.check_pawn_move(51, 43, false));
-        assert!(board.check_pawn_move(52, 44, false));
-        assert!(board.check_pawn_move(53, 45, false));
-        assert!(board.check_pawn_move(54, 46, false));
-        assert!(board.check_pawn_move(55, 47, false));
-
-        board.reset();
-        assert!(board.check_pawn_move(48, 32, false));
-        assert!(board.check_pawn_move(49, 33, false));
-        assert!(board.check_pawn_move(50, 34, false));
-        assert!(board.check_pawn_move(51, 35, false));
-        assert!(board.check_pawn_move(52, 36, false));
-        assert!(board.check_pawn_move(53, 37, false));
-        assert!(board.check_pawn_move(54, 38, false));
-        assert!(board.check_pawn_move(55, 39, false));
-    }
-
-    #[test]
-    fn rook_movement() {
-        let mut board: ChessBoard = ChessBoard::new();
-        board.board = [ChessPiece::new(); 64];
-        board.board[56] = ChessPiece::white(2);
-
-        for i in 0..64 {
-            if i == 56 { continue; }
-            
-            if board.index_rank(i) == board.index_rank(56) ||
-               board.index_file(i) == board.index_file(56)
-            {
-                assert!(board.check_rook_move(56, i as usize));
-            } else {
-                assert!(!board.check_rook_move(56, i as usize));
-            }
-        }
-    }
-
-    #[test]
-    fn knight_movement() {
-        let mut board: ChessBoard = ChessBoard::new();
-        board.board = [ChessPiece::new(); 64];
-        board.board[27] = ChessPiece::white(2);
-
-        for i in 0..64 {
-            if i == 27 { continue; }
-            if i == 27 - 17 || i == 27 - 15 || i == 27 - 10 || i == 27 - 6 ||
-               i == 27 + 17 || i == 27 + 15 || i == 27 + 10 || i == 27 + 6
-            {
-                assert!(board.check_knight_move(27, i));
-            } else {
-                assert!(!board.check_knight_move(27, i));
-            }
-        }
-
-        board.reset();
-        assert!(board.move_by_algebraic("g1", "h3"));
-        assert!(board.move_by_algebraic("b8", "a6"));
-        assert!(board.move_by_algebraic("b1", "c3"));
-        assert!(board.move_by_algebraic("g8", "f6"));
-
-        board.reset();
-        assert!(!board.move_by_algebraic("g1", "e2"));
-        assert!(!board.move_by_algebraic("g8", "e7"));
-        assert!(!board.move_by_algebraic("b1", "d2"));
-        assert!(!board.move_by_algebraic("b8", "d7"));
-    }
-
-    #[test]
-    fn bishop_movement() {
-        let mut board: ChessBoard = ChessBoard::new();
-        for i in 8..16 {
-            board.board[i] = ChessPiece::new();
-            board.board[i+40] = ChessPiece::new();
-        }
-
-        assert!(board.move_by_algebraic("f1", "a6"));
-        assert!(board.move_by_algebraic("c8", "a6"));
-
-        assert!(board.move_by_algebraic("c1", "e3"));
-        assert!(board.move_by_algebraic("f8", "h6"));
-        assert!(!board.move_by_algebraic("e3", "h7"));
-        assert!(!board.move_by_algebraic("e3", "h5"));
-        assert!(board.move_by_algebraic("e3", "h6"));
-    }
-
-    #[test]
-    fn queen_movement() {
-        let mut board: ChessBoard = ChessBoard::new();
-        for i in 8..16 {
-            board.board[i] = ChessPiece::new();
-            board.board[i+40] = ChessPiece::new();
-        }
-
-        assert!(board.move_by_algebraic("d1", "f3"));
-        assert!(board.move_by_algebraic("d8", "d4"));
-        
-        assert!(!board.move_by_algebraic("f3", "h2"));
-        assert!(!board.move_by_algebraic("f3", "g1"));
-        assert!(!board.move_by_algebraic("f3", "e1"));
-        assert!(!board.move_by_algebraic("f3", "d2"));
-        assert!(!board.move_by_algebraic("f3", "d4"));
-        assert!(!board.move_by_algebraic("f3", "e5"));
-    }
-
-    #[test]
-    fn king_movement() {
-        let mut board: ChessBoard = ChessBoard::new();
-        for i in 8..16 {
-            board.board[i] = ChessPiece::new();
-            board.board[i+40] = ChessPiece::new();
-        }
-
-        assert!(!board.move_by_algebraic("e1", "f1"));
-        assert!(!board.move_by_algebraic("e1", "d1"));
-        assert!(!board.move_by_algebraic("e1", "d2"));
-        assert!(!board.move_by_algebraic("e1", "h1"));
-        assert!(!board.move_by_algebraic("e1", "a1"));
-        assert!(board.move_by_algebraic("e1", "e2"));
-    }
-
-    #[test]
-    fn test_en_passant() {
-        let mut board: ChessBoard = ChessBoard::new();
-        for i in 8..16 {
-            board.board[i] = ChessPiece::new();
-            board.board[i+40] = ChessPiece::new();
-        }
-
-        board.board[26] = ChessPiece::black(1);
-        board.board[26].has_moved_two = true;
-        board.board[26].has_moved = true;
-
-        board.board[29] = ChessPiece::black(1);
-        board.board[29].has_moved = true;
-
-        board.board[27] = ChessPiece::white(1);
-        board.board[27].has_moved = true;
-        
-        board.board[30] = ChessPiece::white(1);
-        board.board[30].has_moved_two = true;
-        board.board[30].has_moved = true;
-
-        board.board[39] = ChessPiece::white(1);
-        board.board[39].has_moved = true;
-
-        assert!(board.move_by_algebraic("d5", "c6"));
-        assert!(board.is_tile_empty(26));
-        assert!(board.board[18].piece_id == 1 && board.board[18].color == -1);
-
-        assert!(board.move_by_algebraic("f5", "g4"));
-        assert!(board.is_tile_empty(30));
-        assert!(board.board[38].piece_id == 1 && board.board[38].color == 1);
-
-        assert!(!board.move_by_algebraic("h4", "g5"));
-    }
-
-    #[test]
-    fn test_castling() {
-        let mut board: ChessBoard = ChessBoard::new();
-
-        assert!(board.move_by_algebraic("b1", "a3"));
-        assert!(board.move_by_algebraic("g8", "h6"));
-        assert!(board.move_by_algebraic("b2", "b3"));
-        assert!(board.move_by_algebraic("g7", "g6"));
-        assert!(board.move_by_algebraic("c2", "c3"));
-        assert!(board.move_by_algebraic("f7", "f6"));
-        assert!(board.move_by_algebraic("d2", "d3"));
-        assert!(board.move_by_algebraic("f8", "g7"));
-        assert!(board.move_by_algebraic("c1", "b2"));
-        assert!(board.move_by_algebraic("e7", "e6"));
-        assert!(board.move_by_algebraic("d1", "c2"));
-
-        assert!(!board.move_by_algebraic("e8", "a8"));
-        assert!(board.move_by_algebraic("e8", "h8"));
-
-        assert!(!board.move_by_algebraic("e1", "h1"));
-        assert!(board.move_by_algebraic("e1", "a1"));
-
-        assert!(!board.white_castling.0 && !board.white_castling.1);
-        assert!(!board.black_castling.0 && !board.black_castling.1);
-
-        board.reset();
-        for i in 8..16 {
-            board.board[i] = ChessPiece::new();
-            board.board[i+40] = ChessPiece::new();
-        }
-
-        assert!(board.move_by_algebraic("a1", "a2"));
-        assert!(!board.white_castling.0);
-
-        assert!(board.move_by_algebraic("a8", "a7"));
-        assert!(!board.black_castling.0);
-
-        assert!(board.move_by_algebraic("h1", "h2"));
-        assert!(!board.white_castling.1);
-
-        assert!(board.move_by_algebraic("h8", "h7"));
-        assert!(!board.black_castling.1);
-
-        assert!(!board.white_castling.0 && !board.white_castling.1);
-        assert!(!board.black_castling.0 && !board.black_castling.1);
-    }
-
-    #[test]
-    fn test_check() {
-        let mut board: ChessBoard = ChessBoard::new();
-        board.move_by_algebraic("d2", "d4");
-        board.move_by_algebraic("d7", "d5");
-        board.move_by_algebraic("c2", "c4");
-        board.move_by_algebraic("d5", "c4");
-        board.move_by_algebraic("e1", "d2");
-        board.move_by_algebraic("d8", "d4");
-        assert!(board.simulate_check(true, board.white_king_index));
-        assert!(!board.move_by_algebraic("d2", "d3"));
-        board.move_by_algebraic("a2", "a4");
-        assert!(board.simulate_check(true, board.white_king_index));
-        board.move_by_algebraic("d4", "d2");
-        assert!(board.game_end);
-        board.print();
-    }
-
-    #[test]
-    fn test_checkmate() {
-        let mut board: ChessBoard = ChessBoard::new();
-        board.board = [ChessPiece::new(); 64];
-        board.black_king_index = 32;
-        board.white_king_index = 62;
-
-        board.board[32] = ChessPiece::black(6);
-        board.board[62] = ChessPiece::white(6);
-        board.board[33] = ChessPiece::white(5);
-        board.board[63] = ChessPiece::white(1);
-
-        board.move_by_algebraic("h1", "h2");
-
-        assert!(!board.game_end);
-
-        board.reset();
-        board.board = [ChessPiece::new(); 64];
-        board.black_king_index = 32;
-        board.white_king_index = 62;
-
-        board.board[32] = ChessPiece::black(6);
-        board.board[62] = ChessPiece::white(6);
-        board.board[34] = ChessPiece::white(5);
-        board.board[63] = ChessPiece::white(1);
-        board.board[8] = ChessPiece::white(2);
-        board.board[48] = ChessPiece::white(2);
-
-        board.move_by_algebraic("h1", "h2");
-        assert!(board.game_end);
-    }
+    use super::*;
 }
